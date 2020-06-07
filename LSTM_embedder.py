@@ -13,7 +13,8 @@ def lstm_model(
         num_decoder_tokens=32,
         latent_dim=8):
 
-    encoder_inputs = tf.keras.Input(shape=(None, 1))
+    # Encoder definition
+    encoder_inputs = tf.keras.Input(shape=(None, num_encoder_tokens))
 
     e_outputs, h1, c1 = tf.keras.layers.LSTM(latent_dim, return_state=True,
                                              return_sequences=True, name="e1")(encoder_inputs)
@@ -21,20 +22,22 @@ def lstm_model(
         latent_dim, return_state=True, name="e2")(e_outputs)
     encoder_states = [h1, c1, h2, c2]
 
-    decoder_inputs = tf.keras.Input(shape=(None, 1))
+    # decoder difinition
+    decoder_inputs = tf.keras.Input(shape=(None, num_encoder_tokens))
 
-    out_layer1 = tf.compat.v1.keras.layers.CuDNNLSTM(
+    out_layer1 = tf.keras.layers.LSTM(
         latent_dim, return_sequences=True,
         return_state=True, name="d1")
 
     d_outputs, dh1, dc1 = out_layer1(decoder_inputs, initial_state=[h1, c1])
 
-    out_layer2 = tf.compat.v1.keras.layers.CuDNNLSTM(
+    out_layer2 = tf.keras.layers.LSTM(
         latent_dim, return_sequences=True,
         return_state=True, name="d2")
 
     final, dh2, dc2 = out_layer2(d_outputs, initial_state=[h2, c2])
 
+    # final dense layers
     decoder_dense = tf.keras.layers.Dense(latent_dim,
                                           activation='tanh', name="dense")
     decoder_dense2 = tf.keras.layers.Dense(1,
@@ -46,6 +49,7 @@ def lstm_model(
     decoder_outputs = decoder_dense(final)
     outputs = decoder_dense2(decoder_outputs)
 
+    # define the model
     model = tf.keras.Model([encoder_inputs, decoder_inputs], outputs)
 
     return model
@@ -56,26 +60,27 @@ def preprpcessing():
     datas.encode_all()
     datas.standardize()
 
-    train_ds, val_ds = data_loader(datas.sales_df)
+    train_ds, val_ds = data_loader(datas.sales_df, datas.calendar_df)
     return train_ds, val_ds
 
 
 class Train():
     def __init__(self):
-        self.model = lstm_model()
+        self.num_encoder_tokens = 3085
+        self.model = lstm_model(num_encoder_tokens=self.num_encoder_tokens)
         self.loss = tf.keras.losses.MeanSquaredError()
-        self.optimizer = tf.keras.optimizers.Adam(0.01)
+        self.optimizer = tf.keras.optimizers.Adam(0.001)
         self.train_loss = tf.keras.metrics.Mean(name="train_loss")
         self.test_loss = tf.keras.metrics.Mean(name="val_loss")
 
     @tf.function
-    def train_step(self, x):
+    def train_step(self, x, t):
         with tf.GradientTape() as tape:
             x_ = tf.concat(
                 [tf.expand_dims(tf.zeros_like(x[:, 0]), 1), x[:, :0:-1]], 1
             )
             y = self.model([x, x_])
-            t_loss = self.loss(x, y)
+            t_loss = self.loss(t, y)
         gradients = tape.gradient(t_loss, self.model.trainable_variables)
         self.optimizer.apply_gradients(
             zip(gradients, self.model.trainable_variables))
@@ -83,12 +88,12 @@ class Train():
         self.train_loss(t_loss)
 
     @tf.function
-    def test_step(self, x):
+    def test_step(self, x, t):
         x_ = tf.concat(
             [tf.expand_dims(tf.zeros_like(x[:, 0]), 1), x[:, :0:-1]], 1
         )
         y = self.model([x, x_])
-        t_loss = self.loss(y, x)
+        t_loss = self.loss(t, y)
         self.test_loss(t_loss)
 
     def train(self, train_ds, val_ds):
@@ -101,16 +106,18 @@ class Train():
 
         file_out = open("output.txt", "w")
 
-        n = 0
         with tf.device('gpu:0'):
             for epoch in range(EPOCHS):
-                for value in train_ds:
-                    self.train_step(value)
+                n = 0
+                for x, y in train_ds:
+                    self.train_step(x, y)
                     n += 1
                     print("epoch:", epoch, "batch:", n, end="\r", flush=True)
 
-                for test_value in val_ds:
-                    self.test_step(test_value)
+                for x, y in val_ds:
+                    self.test_step(x, y)
+
+                print(" ")
 
                 template = "Epoch: {}, Loss: {}, Test Loss: {}"
                 print(template.format(epoch+1,

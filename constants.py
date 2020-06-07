@@ -4,9 +4,9 @@ lastDay = 1913
 
 firstDay = 1913 - 365*2
 
-batch_size = 256
+batch_size = 32
 
-EPOCHS = 30
+EPOCHS = 10
 
 data_dir = "./m5-forecasting-accuracy/"
 
