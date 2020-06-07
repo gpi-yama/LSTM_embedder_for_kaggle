@@ -32,12 +32,12 @@ class Preprocessing:
 
         self.sales_df = pd.read_csv(
             data_dir + "sales_train_validation.csv", dtype=priceDTypes
-        )
+        ).iloc[:300]
         self.price_df = pd.read_csv(data_dir+"sell_prices.csv")
 
     def mean_encoding_by_day(self, key):
         tmp_calendar_df = self.calendar_df.iloc[:1913]
-        tmp_calendar_df["enc_"+str(key)] = 0.0
+        calendar_df["enc_"+str(key)] = 0.0
         for i, y in enumerate(tmp_calendar_df[key].unique()):
             ave = np.average(
                 self.sales_df[tmp_calendar_df[tmp_calendar_df[key] == y]["d"]])
@@ -67,22 +67,28 @@ class Preprocessing:
         self.sales_df["enc_"+key] = d_all["enc_"+key].copy()
 
     def encode_all(self):
-        # mean encoding for calendar
-        self.mean_encoding_by_day("year")
-        self.mean_encoding_by_day("event_name_1")
-        self.mean_encoding_by_day("event_name_2")
-        self.mean_encoding_by_day("weekday")
-        self.mean_encoding_by_day("month")
+        # # mean encoding for calendar
+        # self.mean_encoding_by_day("year")
+        # self.mean_encoding_by_day("event_name_1")
+        # self.mean_encoding_by_day("event_name_2")
+        # self.mean_encoding_by_day("weekday")
+        # self.mean_encoding_by_day("month")
 
         # mean encoding for items
         self.mean_encoding_by_item("cat_id")
         self.mean_encoding_by_item("dept_id")
         self.mean_encoding_by_item("store_id")
+        self.mean_encoding_by_item("item_id")
 
         self.cat_encoding("dept_id", self.sales_df)
         self.cat_encoding("item_id", self.sales_df)
         self.cat_encoding("state_id", self.sales_df)
         self.cat_encoding("store_id", self.sales_df)
+
+        self.cat_encoding("year", self.calendar_df)
+        self.cat_encoding("weekday", self.calendar_df)
+        self.cat_encoding("month", self.calendar_df)
+        self.cat_encoding("event_name_1", self.calendar_df)
 
     def standardize(self):
         # calculate standard deviation and mean of sales
