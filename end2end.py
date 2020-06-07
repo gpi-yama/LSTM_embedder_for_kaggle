@@ -29,7 +29,7 @@ def model(
 
     decoder_outputs = decoder_dense(output)
 
-    dense_inputs = tf.keras.Input(shape=(None, num_dense_input))
+    dense_inputs = tf.keras.Input(shape=(num_dense_input))
 
     d1 = tf.keras.layers.Dense(latent_dim2,
                                activation='tanh', name="dense2")
@@ -38,7 +38,7 @@ def model(
     d3 = tf.keras.layers.Dense(1,
                                activation='linear', name="dense4")
 
-    d1out = d1(decoder_outputs)
+    d1out = d1(tf.concat([decoder_outputs, dense_inputs], axis=1))
     d2out = d2(d1out)
     outputs = d3(d2out)
 
@@ -62,7 +62,7 @@ class Train():
     def __init__(self):
         self.num_encoder_tokens = 5
         self.model = model(num_encoder_tokens=self.num_encoder_tokens,
-                           latent_dim=32, latent_dim2=32, latent_dim3=8)
+                           latent_dim=32, latent_dim2=32, latent_dim3=8, num_dense_input=2)
         self.loss = tf.keras.losses.MeanSquaredError()
         self.optimizer = tf.keras.optimizers.Adam(0.001)
         self.train_loss = tf.keras.metrics.Mean(name="train_loss")
